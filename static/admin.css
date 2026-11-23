@@ -42,6 +42,12 @@ body[data-tabs="off"] .admin-app { padding-bottom: 40px; }
 .admin-chip--ok { background: rgba(30, 138, 87, 0.14); color: var(--ok); }
 .admin-chip--off { background: #ECEEF4; color: var(--muted); }
 .admin-chip--danger { background: rgba(216, 50, 60, 0.12); color: var(--pole); }
+.chip-btn { border: 0; background: transparent; color: inherit; cursor: pointer; font-size: 12px; line-height: 1; padding: 0 1px; opacity: .75; }
+.chip-btn:hover { opacity: 1; }
+.card-edit-btn, .card-del-btn { border: 0; background: transparent; cursor: pointer; font-size: 12px; font-weight: 700; padding: 2px 6px; border-radius: 6px; }
+.card-edit-btn { color: var(--cobalt-contrast); }
+.card-del-btn { color: var(--pole); }
+.card-edit-btn:hover, .card-del-btn:hover { background: #ECEEF4; }
 
 .admin-form { display: grid; gap: 10px; margin-top: 12px; }
 .admin-form--2col { grid-template-columns: 1fr 1fr; }
