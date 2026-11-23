@@ -52,6 +52,46 @@
     return data;
   }
 
+  // Kompyuterdan tanlangan rasm faylini serverga yuklaydi (JSON emas, multipart so'rov)
+  async function uploadPhoto(file) {
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await fetch("/api/admin/upload-photo", {
+      method: "POST",
+      headers: { "X-Admin-Token": S.token },
+      body: fd,
+    });
+    let data = null;
+    try { data = await res.json(); } catch { /* bo'sh javob */ }
+    if (!res.ok) {
+      const msg = (data && (data.detail || data.message)) || `Xato (${res.status})`;
+      throw new Error(msg);
+    }
+    return data.url;
+  }
+
+  // Formadagi fayl input bilan "Rasm havolasi" inputini bog'laydi: fayl tanlansa,
+  // avtomatik yuklab, havolasini url inputga yozib qo'yadi.
+  function wirePhotoUpload(form) {
+    if (!form) return;
+    const fileInput = form.querySelector("[data-photo-file]");
+    const urlInput = form.querySelector("input[name='photo_url']");
+    if (!fileInput || !urlInput) return;
+    fileInput.addEventListener("change", async () => {
+      const file = fileInput.files[0];
+      if (!file) return;
+      toast("Rasm yuklanmoqda…");
+      try {
+        urlInput.value = await uploadPhoto(file);
+        toast("Rasm yuklandi");
+      } catch (err) {
+        toast(err.message);
+      } finally {
+        fileInput.value = "";
+      }
+    });
+  }
+
   const KIND_LABEL = { barbershop: "Barbershop", beauty: "Go'zallik saloni" };
   const STATUS_LABEL = { booked: "Band", done: "Bajarildi", cancelled: "Bekor qilindi", no_show: "Kelmadi" };
 
@@ -128,7 +168,11 @@
       <div class="admin-card">
         <div class="admin-card__title">Tumanlar</div>
         <div class="admin-card__actions">
-          ${S.districts.map((d) => `<span class="admin-chip">${esc(d.name)}</span>`).join("") || `<span class="muted small">Hali tuman qo'shilmagan</span>`}
+          ${S.districts.map((d) => `<span class="admin-chip" data-district-chip="${d.id}">
+            ${esc(d.name)}
+            <button type="button" class="chip-btn" data-act="rename-district" data-id="${d.id}" data-name="${esc(d.name)}" title="Nomini o'zgartirish">✎</button>
+            <button type="button" class="chip-btn" data-act="delete-district" data-id="${d.id}" data-name="${esc(d.name)}" title="O'chirish">×</button>
+          </span>`).join("") || `<span class="muted small">Hali tuman qo'shilmagan</span>`}
         </div>
         <form class="admin-inline-form" id="f-district">
           <input class="input" name="name" placeholder="Yangi tuman nomi" required>
@@ -149,7 +193,10 @@
           <div><label>Ochilish</label><input class="input" name="open_time" type="time" value="09:00" required></div>
           <div><label>Yopilish</label><input class="input" name="close_time" type="time" value="20:00" required></div>
           <div><label>Obuna muddati (ixtiyoriy)</label><input class="input" name="paid_until" type="date"></div>
-          <div class="span2"><label>Rasm havolasi (ixtiyoriy)</label><input class="input" name="photo_url" type="url" placeholder="https://..."></div>
+          <div class="span2"><label>Rasm</label>
+            <input class="input" name="photo_url" type="url" placeholder="https://... (yoki pastdan fayl tanlang)">
+            <input type="file" accept="image/*" data-photo-file style="margin-top:6px">
+          </div>
           <div><label>Kenglik — lat (ixtiyoriy)</label><input class="input" name="lat" type="number" step="0.000001" placeholder="41.311081"></div>
           <div><label>Uzunlik — lng (ixtiyoriy)</label><input class="input" name="lng" type="number" step="0.000001" placeholder="69.240562"></div>
           <p class="small muted span2" style="margin:-6px 0 0">Lat/lng — Google Xaritada joyni bosib turib chiqadigan koordinata (masofani mijozga ko'rsatish uchun).</p>
@@ -183,10 +230,13 @@
       try { await api("/api/admin/salons", { method: "POST", body: JSON.stringify(body) }); toast("Salon qo'shildi"); renderSalons(); }
       catch (err) { toast(err.message); }
     });
+    wirePhotoUpload($("#f-salon"));
 
     const listEl = $("#salon-list");
     listEl.innerHTML = S.salons.map((s) => {
       const district = S.districts.find((d) => d.id === s.district_id);
+      const editDistrictOptions = S.districts.map((d) =>
+        `<option value="${d.id}" ${d.id === s.district_id ? "selected" : ""}>${esc(d.name)}</option>`).join("");
       return `
       <div class="admin-card" data-salon="${s.id}">
         <div class="admin-card__head">
@@ -201,8 +251,26 @@
           <span class="small muted">Obuna: ${s.paid_until ? esc(s.paid_until) : "yo'q"}</span>
           <input class="input" type="date" style="height:36px;width:150px" data-paid="${s.id}" value="${esc(s.paid_until || "")}">
         </div>
+        <div class="admin-card__actions">
+          <button type="button" class="card-edit-btn" data-act="toggle-edit-salon" data-id="${s.id}">✎ Tahrirlash</button>
+          <button type="button" class="card-del-btn" data-act="delete-salon" data-id="${s.id}" data-name="${esc(s.name)}">🗑 O'chirish</button>
+        </div>
+        <form class="admin-form admin-form--2col" data-edit-salon="${s.id}" hidden style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line)">
+          <div><label>Nomi</label><input class="input" name="name" value="${esc(s.name)}" required></div>
+          <div><label>Yo'nalish</label><select class="select" name="kind" required>
+            <option value="barbershop" ${s.kind === "barbershop" ? "selected" : ""}>Barbershop</option>
+            <option value="beauty" ${s.kind === "beauty" ? "selected" : ""}>Go'zallik saloni</option>
+          </select></div>
+          <div><label>Tuman</label><select class="select" name="district_id" required>${editDistrictOptions}</select></div>
+          <div><label>Telefon</label><input class="input" name="phone" value="${esc(s.phone || "")}"></div>
+          <div class="span2"><label>Manzil</label><input class="input" name="address" value="${esc(s.address)}" required></div>
+          <div><label>Ochilish</label><input class="input" name="open_time" type="time" value="${esc(s.open_time)}" required></div>
+          <div><label>Yopilish</label><input class="input" name="close_time" type="time" value="${esc(s.close_time)}" required></div>
+          <div class="span2"><button class="btn btn--small" type="submit">Saqlash</button></div>
+        </form>
         <form class="admin-inline-form" data-photo="${s.id}">
           <input class="input" name="photo_url" type="url" placeholder="Rasm havolasi" value="${esc(s.photo_url || "")}">
+          <input type="file" accept="image/*" data-photo-file>
           <button class="btn btn--small btn--quiet" type="submit">Saqlash</button>
         </form>
         <form class="admin-inline-form" data-loc="${s.id}">
@@ -215,6 +283,7 @@
         </div>
       </div>`;
     }).join("");
+    $$("form[data-photo]", listEl).forEach(wirePhotoUpload);
 
     listEl.addEventListener("change", async (e) => {
       const sw = e.target.closest("[id^='active-']");
@@ -233,6 +302,20 @@
     });
 
     listEl.addEventListener("submit", async (e) => {
+      const editForm = e.target.closest("[data-edit-salon]");
+      if (editForm) {
+        e.preventDefault();
+        const id = Number(editForm.dataset.editSalon);
+        const fd = new FormData(editForm);
+        const body = {
+          name: fd.get("name").trim(), kind: fd.get("kind"), district_id: Number(fd.get("district_id")),
+          address: fd.get("address").trim(), phone: fd.get("phone").trim() || "",
+          open_time: fd.get("open_time"), close_time: fd.get("close_time"),
+        };
+        try { await api(`/api/admin/salons/${id}`, { method: "PATCH", body: JSON.stringify(body) }); toast("Salon yangilandi"); renderSalons(); }
+        catch (err) { toast(err.message); }
+        return;
+      }
       const photoForm = e.target.closest("[data-photo]");
       if (photoForm) {
         e.preventDefault();
@@ -258,7 +341,20 @@
       }
     });
 
-    listEl.addEventListener("click", (e) => {
+    listEl.addEventListener("click", async (e) => {
+      const toggleBtn = e.target.closest("[data-act='toggle-edit-salon']");
+      if (toggleBtn) {
+        const form = listEl.querySelector(`[data-edit-salon="${toggleBtn.dataset.id}"]`);
+        if (form) form.hidden = !form.hidden;
+        return;
+      }
+      const delBtn = e.target.closest("[data-act='delete-salon']");
+      if (delBtn) {
+        if (!confirm(`"${delBtn.dataset.name}" salonini butunlay o'chirish kerakmi? Bu amalni qaytarib bo'lmaydi.`)) return;
+        try { await api(`/api/admin/salons/${delBtn.dataset.id}`, { method: "DELETE" }); toast("Salon o'chirildi"); renderSalons(); }
+        catch (err) { toast(err.message); }
+        return;
+      }
       const btn = e.target.closest("[data-action='go-masters']");
       if (!btn) return;
       S.selectedSalonId = Number(btn.dataset.id);
@@ -288,7 +384,10 @@
         <form class="admin-form admin-form--2col" id="f-master" style="margin-top:14px">
           <div><label>Usta ismi</label><input class="input" name="name" required></div>
           <div><label>Obuna muddati (ixtiyoriy)</label><input class="input" name="paid_until" type="date"></div>
-          <div class="span2"><label>Rasm havolasi (ixtiyoriy)</label><input class="input" name="photo_url" type="url" placeholder="https://..."></div>
+          <div class="span2"><label>Rasm</label>
+            <input class="input" name="photo_url" type="url" placeholder="https://... (yoki pastdan fayl tanlang)">
+            <input type="file" accept="image/*" data-photo-file style="margin-top:6px">
+          </div>
           <div class="span2"><button class="btn" type="submit">Usta qo'shish</button></div>
         </form>
       </div>
@@ -307,6 +406,7 @@
         toast("Usta qo'shildi"); renderMasters();
       } catch (err) { toast(err.message); }
     });
+    wirePhotoUpload($("#f-master"));
 
     let masters;
     try { masters = await api(`/api/admin/salons/${S.selectedSalonId}/masters`); }
@@ -334,12 +434,18 @@
         </form>
         <form class="admin-inline-form" data-mphoto="${m.id}">
           <input class="input" name="photo_url" type="url" placeholder="Rasm havolasi" value="${esc(m.photo_url || "")}">
+          <input type="file" accept="image/*" data-photo-file>
           <button class="btn btn--small btn--quiet" type="submit">Saqlash</button>
         </form>
+        <div class="admin-card__actions">
+          <button type="button" class="card-edit-btn" data-act="rename-master" data-id="${m.id}" data-name="${esc(m.name)}">✎ Ismini o'zgartirish</button>
+          <button type="button" class="card-del-btn" data-act="delete-master" data-id="${m.id}" data-name="${esc(m.name)}">🗑 O'chirish</button>
+        </div>
         <div class="admin-card__actions">
           <button class="admin-link-btn" data-action="go-services" data-id="${m.id}" data-name="${esc(m.name)}">Xizmatlari →</button>
         </div>
       </div>`).join("") : `<div class="admin-card admin-empty">Bu salonda hali usta yo'q</div>`;
+    $$("form[data-mphoto]", listEl).forEach(wirePhotoUpload);
 
     listEl.addEventListener("change", async (e) => {
       const sw = e.target.closest("[id^='m-active-']");
@@ -379,7 +485,24 @@
       }
     });
 
-    listEl.addEventListener("click", (e) => {
+    listEl.addEventListener("click", async (e) => {
+      const renameBtn = e.target.closest("[data-act='rename-master']");
+      if (renameBtn) {
+        const name = prompt("Ustaning yangi ismi:", renameBtn.dataset.name);
+        if (name === null) return;
+        const trimmed = name.trim();
+        if (!trimmed || trimmed === renameBtn.dataset.name) return;
+        try { await api(`/api/admin/masters/${renameBtn.dataset.id}`, { method: "PATCH", body: JSON.stringify({ name: trimmed }) }); toast("Ism yangilandi"); renderMasters(); }
+        catch (err) { toast(err.message); }
+        return;
+      }
+      const delBtn = e.target.closest("[data-act='delete-master']");
+      if (delBtn) {
+        if (!confirm(`"${delBtn.dataset.name}" ustasini butunlay o'chirish kerakmi? Bu amalni qaytarib bo'lmaydi.`)) return;
+        try { await api(`/api/admin/masters/${delBtn.dataset.id}`, { method: "DELETE" }); toast("Usta o'chirildi"); renderMasters(); }
+        catch (err) { toast(err.message); }
+        return;
+      }
       const btn = e.target.closest("[data-action='go-services']");
       if (!btn) return;
       S.selectedMasterId = Number(btn.dataset.id);
@@ -534,7 +657,7 @@
     fn();
   }
 
-  document.addEventListener("click", (e) => {
+  document.addEventListener("click", async (e) => {
     const tabBtn = e.target.closest("#admin-tabs [data-tab]");
     if (tabBtn) { S.tab = tabBtn.dataset.tab; render(); return; }
     const out = e.target.closest("[data-action='logout']");
@@ -542,6 +665,23 @@
       localStorage.removeItem(TOKEN_KEY);
       S.token = "";
       render();
+      return;
+    }
+    const renameBtn = e.target.closest("[data-act='rename-district']");
+    if (renameBtn) {
+      const name = prompt("Tumanning yangi nomi:", renameBtn.dataset.name);
+      if (name === null) return;
+      const trimmed = name.trim();
+      if (!trimmed || trimmed === renameBtn.dataset.name) return;
+      try { await api(`/api/admin/districts/${renameBtn.dataset.id}`, { method: "PATCH", body: JSON.stringify({ name: trimmed }) }); toast("Tuman yangilandi"); render(); }
+      catch (err) { toast(err.message); }
+      return;
+    }
+    const delDistrictBtn = e.target.closest("[data-act='delete-district']");
+    if (delDistrictBtn) {
+      if (!confirm(`"${delDistrictBtn.dataset.name}" tumanini o'chirish kerakmi?`)) return;
+      try { await api(`/api/admin/districts/${delDistrictBtn.dataset.id}`, { method: "DELETE" }); toast("Tuman o'chirildi"); render(); }
+      catch (err) { toast(err.message); }
     }
   });
 
