@@ -1,0 +1,48 @@
+/* BandQil — Usta (barber) paneli. style.css'dagi mavzu o'zgaruvchilaridan foydalanadi. */
+.usta-login { max-width: 360px; margin: 14vh auto 0; }
+.usta-login .field { margin-top: 16px; }
+.usta-login .btn { margin-top: 18px; }
+
+.usta-top { display: flex; align-items: center; justify-content: space-between; padding: 18px 0 2px; }
+.usta-top .date-nav { display: flex; align-items: center; gap: 6px; }
+.usta-top .date-nav button { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 10px; background: var(--surface); border: 1px solid var(--line); color: var(--muted); font-size: 16px; }
+.usta-top .date-nav input { height: 34px; padding: 0 8px; font-size: 13px; font-weight: 600; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+
+.usta-hero { margin-top: 18px; padding: 22px; border-radius: 20px; background: var(--cta); color: var(--cta-contrast); }
+.usta-hero__label { font-size: 13px; font-weight: 700; opacity: .85; text-transform: uppercase; letter-spacing: .03em; }
+.usta-hero__amount { margin-top: 6px; font-family: var(--font-display); font-weight: 700; font-size: 34px; letter-spacing: -0.02em; }
+.usta-hero__sub { margin-top: 6px; font-size: 13px; opacity: .85; }
+
+.usta-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 12px; }
+.usta-stat { padding: 14px 10px; text-align: center; background: var(--surface); border: none; border-radius: 16px; box-shadow: 0 10px 20px -18px rgba(30,25,15,.3); }
+.usta-stat b { display: block; font-family: var(--font-display); font-size: 24px; font-weight: 700; }
+.usta-stat span { display: block; margin-top: 2px; font-size: 12px; color: var(--muted); }
+
+.usta-current { margin-top: 20px; padding: 18px; background: var(--surface); border: none; border-radius: 18px; box-shadow: 0 1px 0 rgba(21,23,28,.03), 0 12px 24px -20px rgba(30,25,15,.32); }
+.usta-current__badge { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; color: var(--cobalt-contrast); }
+.usta-current__badge::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--cobalt); }
+.usta-current__time { margin-top: 6px; font-size: 13px; color: var(--muted); font-weight: 600; }
+.usta-current__name { margin-top: 2px; font-family: var(--font-display); font-weight: 700; font-size: 22px; }
+.usta-current__contact { display: flex; align-items: center; gap: 14px; margin-top: 6px; font-size: 14px; }
+.usta-current__contact a { color: var(--ink); font-weight: 700; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--cobalt); }
+.usta-current__tags { display: flex; gap: 8px; margin-top: 12px; }
+.usta-current__tags span { padding: 5px 10px; font-size: 13px; background: var(--cobalt-soft); color: var(--cobalt-contrast); border-radius: 100px; font-weight: 700; }
+.usta-current__actions { display: flex; gap: 10px; margin-top: 16px; }
+.usta-current__actions .btn { height: 46px; line-height: 46px; }
+.usta-current__actions .btn--ok { background: var(--ok); color: #fff; }
+
+.usta-sched { margin-top: 10px; }
+.usta-sched__row { display: flex; align-items: center; gap: 12px; padding: 13px 4px; border-top: 1px solid var(--line); }
+.usta-sched__row:first-child { border-top: none; }
+.usta-sched__time { flex: 0 0 52px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.usta-sched__body { flex: 1 1 auto; min-width: 0; }
+.usta-sched__name { font-weight: 600; }
+.usta-sched__svc { display: block; font-size: 13px; color: var(--muted); }
+.usta-sched__status { flex: 0 0 auto; padding: 4px 10px; font-size: 12px; font-weight: 700; border-radius: 100px; background: #ECEEF4; color: var(--muted); }
+.usta-sched__status--done { background: rgba(30,138,87,.14); color: var(--ok); }
+.usta-sched__status--booked { background: var(--cobalt-soft); color: var(--cobalt-contrast); }
+
+.usta-profile { margin-top: 18px; padding: 20px; background: var(--surface); border: none; border-radius: 18px; box-shadow: 0 10px 20px -18px rgba(30,25,15,.3); }
+.usta-profile__row { display: flex; justify-content: space-between; padding: 10px 0; border-top: 1px solid var(--line); font-size: 14px; }
+.usta-profile__row:first-child { border-top: none; }
+.usta-profile__row span:first-child { color: var(--muted); }
