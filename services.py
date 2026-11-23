@@ -494,6 +494,34 @@ def add_district(name):
         return {"id": _insert(c, "INSERT INTO districts (name) VALUES (?)", (name,))}
 
 
+def rename_district(district_id, name):
+    name = (name or "").strip()
+    if not name:
+        raise BookingError("invalid", "Tuman nomini kiriting")
+    with db() as c:
+        try:
+            cur = c.execute("UPDATE districts SET name = ? WHERE id = ?", (name, district_id))
+        except sqlite3.IntegrityError:
+            raise BookingError("invalid", "Bu nomdagi tuman allaqachon bor")
+        if cur.rowcount == 0:
+            raise BookingError("not_found", "Tuman topilmadi")
+    return {"ok": True}
+
+
+def delete_district(district_id):
+    """Tumanni o'chirish. Agar unda salonlar bo'lsa, o'chirib bo'lmaydi —
+    avval o'sha salonlarni boshqa tumanga o'tkazing yoki o'chiring."""
+    with db() as c:
+        used = c.execute("SELECT 1 FROM salons WHERE district_id = ? LIMIT 1", (district_id,)).fetchone()
+        if used:
+            raise BookingError("invalid", "Bu tumanda salonlar bor, avval ularni boshqa tumanga "
+                                          "o'tkazing yoki o'chiring")
+        cur = c.execute("DELETE FROM districts WHERE id = ?", (district_id,))
+        if cur.rowcount == 0:
+            raise BookingError("not_found", "Tuman topilmadi")
+    return {"ok": True}
+
+
 def _check_latlng(lat, lng):
     if lat is None and lng is None:
         return
@@ -525,6 +553,65 @@ def add_salon(name, kind, district_id, address, phone=None,
     return {"id": new_id}
 
 
+def update_salon(salon_id, name=None, kind=None, district_id=None, address=None, phone=None,
+                  open_time=None, close_time=None):
+    """Salonning asosiy maydonlarini tuzatish. Faqat berilgan (None bo'lmagan) maydonlar o'zgaradi."""
+    fields, params = [], []
+    if name is not None:
+        name = name.strip()
+        if not name:
+            raise BookingError("invalid", "Salon nomi bo'sh bo'lmasin")
+        fields.append("name = ?"); params.append(name)
+    if kind is not None:
+        if kind not in KINDS:
+            raise BookingError("invalid", "kind: barbershop yoki beauty")
+        fields.append("kind = ?"); params.append(kind)
+    if district_id is not None:
+        fields.append("district_id = ?"); params.append(district_id)
+    if address is not None:
+        address = address.strip()
+        if not address:
+            raise BookingError("invalid", "Manzil bo'sh bo'lmasin")
+        fields.append("address = ?"); params.append(address)
+    if phone is not None:
+        fields.append("phone = ?"); params.append(phone.strip() or None)
+    if open_time is not None:
+        _check_hhmm(open_time, "open_time")
+        fields.append("open_time = ?"); params.append(open_time)
+    if close_time is not None:
+        _check_hhmm(close_time, "close_time")
+        fields.append("close_time = ?"); params.append(close_time)
+    if not fields:
+        raise BookingError("invalid", "O'zgartiradigan hech narsa berilmadi")
+    params.append(salon_id)
+    with db() as c:
+        cur = c.execute(f"UPDATE salons SET {', '.join(fields)} WHERE id = ?", params)
+        if cur.rowcount == 0:
+            raise BookingError("not_found", "Salon topilmadi")
+    return {"ok": True}
+
+
+def delete_salon(salon_id):
+    """Salonni (va uning ustalari/xizmatlarini) butunlay o'chirish. Agar unga bron qilingan
+    bo'lsa (hozir yoki tarixda), o'chirib bo'lmaydi — buning o'rniga yashiring (faolsizlantiring)."""
+    with db() as c:
+        used = c.execute(
+            "SELECT 1 FROM bookings b JOIN masters m ON m.id = b.master_id WHERE m.salon_id = ? LIMIT 1",
+            (salon_id,),
+        ).fetchone()
+        if used:
+            raise BookingError("invalid", "Bu salonda bronlar tarixi bor, o'chirib bo'lmaydi. "
+                                          "Buning o'rniga yashiring (faolsizlantiring)")
+        master_ids = [r[0] for r in c.execute("SELECT id FROM masters WHERE salon_id = ?", (salon_id,))]
+        for mid in master_ids:
+            c.execute("DELETE FROM services WHERE master_id = ?", (mid,))
+        c.execute("DELETE FROM masters WHERE salon_id = ?", (salon_id,))
+        cur = c.execute("DELETE FROM salons WHERE id = ?", (salon_id,))
+        if cur.rowcount == 0:
+            raise BookingError("not_found", "Salon topilmadi")
+    return {"ok": True}
+
+
 def set_salon_photo(salon_id, photo_url):
     """Salonning rasm manzilini belgilash yoki o'chirish (photo_url=None bo'lsa, rasm olib tashlanadi)."""
     with db() as c:
@@ -550,6 +637,35 @@ def add_master(salon_id, name, paid_until=None, photo_url=None):
         return {"id": _insert(
             c, "INSERT INTO masters (salon_id, name, paid_until, photo_url) VALUES (?, ?, ?, ?)",
             (salon_id, name.strip(), paid_until, photo_url))}
+
+
+def update_master(master_id, name=None):
+    """Usta ismini tuzatish."""
+    if name is None:
+        raise BookingError("invalid", "O'zgartiradigan hech narsa berilmadi")
+    name = name.strip()
+    if not name:
+        raise BookingError("invalid", "Usta ismi bo'sh bo'lmasin")
+    with db() as c:
+        cur = c.execute("UPDATE masters SET name = ? WHERE id = ?", (name, master_id))
+        if cur.rowcount == 0:
+            raise BookingError("not_found", "Usta topilmadi")
+    return {"ok": True}
+
+
+def delete_master(master_id):
+    """Ustani (va uning xizmatlarini) butunlay o'chirish. Agar unga bron qilingan bo'lsa
+    (hozir yoki tarixda), o'chirib bo'lmaydi — buning o'rniga faolsizlantiring."""
+    with db() as c:
+        used = c.execute("SELECT 1 FROM bookings WHERE master_id = ? LIMIT 1", (master_id,)).fetchone()
+        if used:
+            raise BookingError("invalid", "Bu ustaga bronlar tarixi bor, o'chirib bo'lmaydi. "
+                                          "Buning o'rniga faolsizlantiring")
+        c.execute("DELETE FROM services WHERE master_id = ?", (master_id,))
+        cur = c.execute("DELETE FROM masters WHERE id = ?", (master_id,))
+        if cur.rowcount == 0:
+            raise BookingError("not_found", "Usta topilmadi")
+    return {"ok": True}
 
 
 def set_master_photo(master_id, photo_url):
