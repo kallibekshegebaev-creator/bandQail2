@@ -2,10 +2,11 @@
 Brauzerda http://127.0.0.1:8000/docs ochilsa, hamma so'rovlarni qo'lda sinab ko'rish mumkin."""
 import logging
 import secrets
+import uuid
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, FastAPI, Header, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, FastAPI, File, Header, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -20,6 +21,17 @@ logging.basicConfig(level=logging.INFO)
 init_db()
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
+MEDIA_DIR = STATIC_DIR / "media"
+MEDIA_DIR.mkdir(parents=True, exist_ok=True)
+
+# Rasm yuklashda ruxsat etilgan turlar va cheklov (5 MB)
+ALLOWED_IMAGE_TYPES = {
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+    "image/gif": ".gif",
+}
+MAX_UPLOAD_BYTES = 5 * 1024 * 1024
 
 app = FastAPI(title="BandQil API", version="0.1")
 
@@ -75,6 +87,10 @@ class DistrictIn(BaseModel):
     name: str
 
 
+class DistrictRenameIn(BaseModel):
+    name: str
+
+
 class SalonIn(BaseModel):
     name: str
     kind: str = Field(description="barbershop yoki beauty")
@@ -94,6 +110,20 @@ class MasterIn(BaseModel):
     name: str
     paid_until: Optional[str] = Field(default=None, description="YYYY-MM-DD")
     photo_url: Optional[str] = Field(default=None, description="Usta rasmining havolasi")
+
+
+class SalonUpdateIn(BaseModel):
+    name: Optional[str] = None
+    kind: Optional[str] = None
+    district_id: Optional[int] = None
+    address: Optional[str] = None
+    phone: Optional[str] = None
+    open_time: Optional[str] = None
+    close_time: Optional[str] = None
+
+
+class MasterUpdateIn(BaseModel):
+    name: Optional[str] = None
 
 
 class SalonPhotoIn(BaseModel):
@@ -243,9 +273,36 @@ def require_admin(x_admin_token: str = Header(default="")):
 admin = APIRouter(prefix="/api/admin", dependencies=[Depends(require_admin)], tags=["admin"])
 
 
+@admin.post("/upload-photo")
+async def admin_upload_photo(file: UploadFile = File(...)):
+    """Kompyuterdan rasm faylini qabul qilib, serverda saqlaydi va havolasini qaytaradi.
+    Qaytgan 'url' ni salon/usta formasidagi 'Rasm havolasi' maydoniga qo'yish mumkin."""
+    ext = ALLOWED_IMAGE_TYPES.get((file.content_type or "").lower())
+    if ext is None:
+        raise HTTPException(status_code=400, detail="Faqat rasm fayli (jpg, png, webp, gif) yuklash mumkin")
+    data = await file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="Fayl bo'sh")
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=400, detail="Rasm hajmi 5 MB dan oshmasligi kerak")
+    filename = f"{uuid.uuid4().hex}{ext}"
+    (MEDIA_DIR / filename).write_bytes(data)
+    return {"url": f"/media/{filename}"}
+
+
 @admin.post("/districts")
 def admin_add_district(body: DistrictIn):
     return svc.add_district(body.name)
+
+
+@admin.patch("/districts/{district_id}")
+def admin_rename_district(district_id: int, body: DistrictRenameIn):
+    return svc.rename_district(district_id, body.name)
+
+
+@admin.delete("/districts/{district_id}")
+def admin_delete_district(district_id: int):
+    return svc.delete_district(district_id)
 
 
 @admin.get("/salons")
@@ -259,6 +316,17 @@ def admin_add_salon(body: SalonIn):
     return svc.add_salon(body.name, body.kind, body.district_id, body.address, body.phone,
                          body.open_time, body.close_time, body.paid_until,
                          body.photo_url, body.lat, body.lng)
+
+
+@admin.patch("/salons/{salon_id}")
+def admin_update_salon(salon_id: int, body: SalonUpdateIn):
+    return svc.update_salon(salon_id, body.name, body.kind, body.district_id, body.address,
+                             body.phone, body.open_time, body.close_time)
+
+
+@admin.delete("/salons/{salon_id}")
+def admin_delete_salon(salon_id: int):
+    return svc.delete_salon(salon_id)
 
 
 @admin.post("/salons/{salon_id}/photo")
@@ -279,6 +347,16 @@ def admin_get_masters(salon_id: int):
 @admin.post("/masters")
 def admin_add_master(body: MasterIn):
     return svc.add_master(body.salon_id, body.name, body.paid_until, body.photo_url)
+
+
+@admin.patch("/masters/{master_id}")
+def admin_update_master(master_id: int, body: MasterUpdateIn):
+    return svc.update_master(master_id, body.name)
+
+
+@admin.delete("/masters/{master_id}")
+def admin_delete_master(master_id: int):
+    return svc.delete_master(master_id)
 
 
 @admin.post("/masters/{master_id}/photo")
