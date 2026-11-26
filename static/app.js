@@ -10,9 +10,11 @@
   const MONTHS = ["yanvar", "fevral", "mart", "aprel", "may", "iyun", "iyul", "avgust", "sentabr", "oktabr", "noyabr", "dekabr"];
   const STATUS = { booked: "Band qilingan", done: "Bajarildi", cancelled: "Bekor qilindi", no_show: "Kelmadi", past: "Vaqti o'tgan" };
 
-  // Flat ikonkalar (emoji o'rniga) — ikkala yo'nalish uchun
+  // Flat ikonkalar (emoji o'rniga) — har bir yo'nalish uchun
   const ICON_BARBER = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.5" y2="15.5"/><line x1="8.5" y1="8.5" x2="20" y2="20"/></svg>`;
   const ICON_BEAUTY = `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2c.6 3.2 1.9 5.6 4.3 7.7C18.8 11.8 21 12.6 22 13c-1 .4-3.2 1.2-5.7 3.3-2.4 2.1-3.7 4.5-4.3 7.7-.6-3.2-1.9-5.6-4.3-7.7C5.2 14.2 3 13.4 2 13c1-.4 3.2-1.2 5.7-3.3C10.1 7.6 11.4 5.2 12 2Z"/></svg>`;
+  const ICON_COMPUTER = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>`;
+  const ICON_BILLIARD = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="15" cy="9" r="4.2"/><circle cx="15" cy="9" r="1" fill="currentColor" stroke="none"/><line x1="2.5" y1="21.5" x2="9.8" y2="14.2"/></svg>`;
 
   // BandQil logotip belgisi (bosh sahifa uchun) — navy kvadrat + oltin "bron" aksenti
   const LOGO_MARK = `<svg width="48" height="48" viewBox="0 0 48 48" aria-hidden="true">
@@ -23,16 +25,23 @@
     <line x1="29.8" y1="31.9" x2="39.2" y2="31.9" stroke="#15171C" stroke-width="1.5"/>
   </svg>`;
 
-  // Ikki asosiy yo'nalish: har biri o'z mavzusi (rang palitrasi) bilan
+  // To'rtta yo'nalish: har biri o'z mavzusi (rang palitrasi) va resurs nomi (usta/stol/kompyuter) bilan
   const KIND_META = {
-    barbershop: { theme: "barber", label: "Barbershop", icon: ICON_BARBER, desc: "Soch va soqol olish, erkaklar parvarishi" },
-    beauty: { theme: "beauty", label: "Go'zallik salonlari", icon: ICON_BEAUTY, desc: "Soch turmagi, manikyur, kosmetologiya" },
+    barbershop: { theme: "barber", label: "Barbershoplar", shortLabel: "Barbershop", icon: ICON_BARBER, desc: "Soch va soqol olish, erkaklar parvarishi", resource: "Usta", resourcePl: "usta" },
+    beauty: { theme: "beauty", label: "Go'zallik salonlari", shortLabel: "Go'zallik saloni", icon: ICON_BEAUTY, desc: "Soch turmagi, manikyur, kosmetologiya", resource: "Usta", resourcePl: "usta" },
+    computer_club: { theme: "club", label: "Kompyuter klublari", shortLabel: "Kompyuter klubi", icon: ICON_COMPUTER, desc: "Zamonaviy o'yin va internet klublar", resource: "Kompyuter", resourcePl: "kompyuter" },
+    billiard_club: { theme: "billiard", label: "Billyard klublari", shortLabel: "Billyard klubi", icon: ICON_BILLIARD, desc: "Do'stlar bilan maroqli dam olish", resource: "Stol", resourcePl: "stol" },
   };
   const themeFor = (kind) => (KIND_META[kind] && KIND_META[kind].theme) || "neutral";
   const setTheme = (t) => { document.body.dataset.theme = t; };
 
   const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const money = (n) => Number(n).toLocaleString("ru-RU") + " so'm";
+  const durLabel = (min) => {
+    if (min < 60) return `${min} daqiqa`;
+    const h = Math.floor(min / 60), rest = min % 60;
+    return rest ? `${h} soat ${rest} daqiqa` : `${h} soat`;
+  };
   const distanceLabel = (km) => km == null ? "" : (km < 1 ? `${Math.max(1, Math.round(km * 1000))} m` : `${km.toFixed(1)} km`);
   const pad = (n) => String(n).padStart(2, "0");
   const ymd = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -247,16 +256,19 @@
       return;
     }
     S.salons = salons;
-    box.innerHTML = salons.map((s, i) => `
+    box.innerHTML = salons.map((s, i) => {
+      const meta = KIND_META[s.kind] || KIND_META.barbershop;
+      return `
       <button class="salon-card" data-action="open-salon" data-i="${i}">
-        <span class="salon-card__media" aria-hidden="true">${s.photo_url ? `<img src="${esc(s.photo_url)}" alt="" loading="lazy">` : (s.kind === "beauty" ? ICON_BEAUTY : ICON_BARBER)}</span>
+        <span class="salon-card__media" aria-hidden="true">${s.photo_url ? `<img src="${esc(s.photo_url)}" alt="" loading="lazy">` : meta.icon}</span>
         <span class="salon-card__body">
           <span class="salon-card__head"><span class="salon-card__name">${esc(s.name)}</span><span class="salon-card__chevron" aria-hidden="true">›</span></span>
           <span class="salon-card__stats">${ratingLine(s.rating, s.reviews_count)}<span class="dot" aria-hidden="true">·</span>${esc(s.open_time)}–${esc(s.close_time)}${s.distance_km != null ? `<span class="dot" aria-hidden="true">·</span><span class="salon-card__dist">${distanceLabel(s.distance_km)}</span>` : ""}</span>
           <span class="salon-card__addr">${esc(s.address)}</span>
-          <span class="salon-card__meta">${s.kind === "beauty" ? "Go'zallik saloni" : "Sartaroshxona"}</span>
+          <span class="salon-card__meta">${esc(meta.shortLabel)}</span>
         </span>
-      </button>`).join("");
+      </button>`;
+    }).join("");
   }
 
   // ---------- 2. Salon: ustalar va xizmatlar ----------
@@ -264,7 +276,7 @@
     const my = S.token;
     const salon = S.view.salon;
     setTheme(themeFor(salon.kind));
-    const meta = KIND_META[salon.kind];
+    const meta = KIND_META[salon.kind] || KIND_META.barbershop;
     app.innerHTML = `<header class="top">${backBtn("Salonlar")}</header>
       <div class="head">${meta ? `<span class="kind-tag">${meta.icon} ${esc(meta.label)}</span>` : ""}<h1>${esc(salon.name)}</h1>
       <p class="muted">${esc(salon.address)}</p>${salon.phone ? `<p class="small muted">Tel: ${esc(salon.phone)}</p>` : ""}</div>
@@ -276,7 +288,7 @@
     masters = masters.filter((m) => m.services.length);
     S.masters = masters;
     if (!masters.length) {
-      $("#masters").innerHTML = `<div class="empty"><h2>Hozircha usta yo'q</h2><p class="muted">Bu salonda navbat olish yopiq. Boshqa salonni tanlang.</p></div>`;
+      $("#masters").innerHTML = `<div class="empty"><h2>Hozircha ${esc(meta.resourcePl)} yo'q</h2><p class="muted">Bu salonda navbat olish yopiq. Boshqa salonni tanlang.</p></div>`;
       return;
     }
     $("#masters").innerHTML = masters.map((m, mi) => `
@@ -288,7 +300,7 @@
         </div>
         ${m.services.map((sv, si) => `
           <button class="service" data-action="pick-service" data-m="${mi}" data-s="${si}">
-            <span><span class="service__name">${esc(sv.name)}</span><span class="service__dur">${sv.duration_min} daqiqa</span></span>
+            <span><span class="service__name">${esc(sv.name)}</span><span class="service__dur">${durLabel(sv.duration_min)}</span></span>
             <span class="price">${money(sv.price)}</span>
           </button>`).join("")}
       </section>`).join("");
@@ -307,7 +319,7 @@
     app.innerHTML = `<header class="top">${backBtn(b.salon.name)}</header>
       <div class="head"><h1>${esc(b.service.name)}</h1>
         <p>${esc(b.master.name)}, ${esc(b.salon.name)}</p>
-        <p class="muted small">${esc(b.salon.address)}<br>${b.service.duration_min} daqiqa · ${money(b.service.price)}</p></div>
+        <p class="muted small">${esc(b.salon.address)}<br>${durLabel(b.service.duration_min)} · ${money(b.service.price)}</p></div>
       <div class="dates" id="dates" role="group" aria-label="Sana">${days.map((d) => `
         <button class="date" data-action="pick-date" data-date="${ymd(d)}" aria-pressed="${ymd(d) === b.date}"><span>${WEEK[d.getDay()]}</span><b>${d.getDate()}</b><span>${MONTHS[d.getMonth()].slice(0, 3)}</span></button>`).join("")}</div>
       <div id="slots-box">${loading()}</div>
@@ -432,7 +444,7 @@
       <div class="talon__when">${dayLabel(start)}</div>
       <div class="talon__time">${bk.start_at.slice(11)}–${bk.end_at.slice(11)}</div>
       <dl>
-        <div class="talon__row"><dt>Usta</dt><dd>${esc(bk.master_name)}, ${esc(bk.salon_name)}</dd></div>
+        <div class="talon__row"><dt>${esc((KIND_META[bk.kind] || KIND_META.barbershop).resource)}</dt><dd>${esc(bk.master_name)}, ${esc(bk.salon_name)}</dd></div>
         <div class="talon__row"><dt>Manzil</dt><dd>${esc(bk.address)}</dd></div>
         <div class="talon__row"><dt>Xizmat</dt><dd>${esc(bk.service_name)}, ${money(bk.price)}</dd></div>
       </dl>
