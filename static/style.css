@@ -60,6 +60,42 @@ body[data-theme="beauty"] {
   color-scheme: light;
 }
 
+/* ---------- Kompyuter klubi mavzusi: sovuq kulrang-ko'k baza, elektr-indigo aksent ---------- */
+body[data-theme="club"] {
+  --paper: #EEF1F8;
+  --surface: #FFFFFF;
+  --ink: #171B2B;
+  --muted: #80869A;
+  --line: #DDE2EF;
+  --cobalt: #5B6CFF;
+  --cobalt-soft: rgba(91, 108, 255, 0.16);
+  --cobalt-contrast: #FFFFFF;
+  --cobalt-contrast-soft: rgba(255, 255, 255, 0.72);
+  --pole: #D8323C;
+  --ok: #1E8A57;
+  --cta: var(--cobalt);
+  --cta-contrast: var(--cobalt-contrast);
+  color-scheme: light;
+}
+
+/* ---------- Billyard klubi mavzusi: och sabza baza, chuqur zumrad (stol mato) aksent ---------- */
+body[data-theme="billiard"] {
+  --paper: #EEF4ED;
+  --surface: #FFFFFF;
+  --ink: #122017;
+  --muted: #7C8C80;
+  --line: #DCE8DC;
+  --cobalt: #0F6B42;
+  --cobalt-soft: rgba(15, 107, 66, 0.16);
+  --cobalt-contrast: #FFFFFF;
+  --cobalt-contrast-soft: rgba(255, 255, 255, 0.72);
+  --pole: #D8323C;
+  --ok: #1E8A57;
+  --cta: var(--cobalt);
+  --cta-contrast: var(--cobalt-contrast);
+  color-scheme: light;
+}
+
 *, *::before, *::after { box-sizing: border-box; }
 * { margin: 0; }
 html { -webkit-text-size-adjust: 100%; }
@@ -122,10 +158,14 @@ h3 { font-family: var(--font-display); font-weight: 700; font-size: 17px; line-h
 .direction-card__icon svg { width: 26px; height: 26px; }
 .direction-card--barber .direction-card__icon { background: rgba(246, 201, 69, 0.22); color: #C98F10; }
 .direction-card--beauty .direction-card__icon { background: rgba(236, 154, 179, 0.22); color: #C76E8B; }
+.direction-card--club .direction-card__icon { background: rgba(91, 108, 255, 0.16); color: #5B6CFF; }
+.direction-card--billiard .direction-card__icon { background: rgba(15, 107, 66, 0.16); color: #0F6B42; }
 .direction-card__body { flex: 1 1 auto; min-width: 0; }
 .direction-card__kicker { display: block; font-size: 11px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 3px; }
 .direction-card--barber .direction-card__kicker { color: #C98F10; }
 .direction-card--beauty .direction-card__kicker { color: #C76E8B; }
+.direction-card--club .direction-card__kicker { color: #5B6CFF; }
+.direction-card--billiard .direction-card__kicker { color: #0F6B42; }
 .direction-card__title { display: block; font-family: var(--font-display); font-weight: 800; font-size: 19px; letter-spacing: -0.02em; color: var(--ink); }
 .direction-card__desc { display: block; margin-top: 3px; font-size: 14px; line-height: 1.35; color: var(--muted); }
 .direction-card__arrow { flex: 0 0 auto; font-size: 24px; font-weight: 700; line-height: 1; color: var(--muted); }
@@ -316,6 +356,8 @@ h3 { font-family: var(--font-display); font-weight: 700; font-size: 17px; line-h
   :root { --app-max: 560px; }
   body { background: #E7E1D1; }
   body[data-theme="beauty"] { background: #F3DCDD; }
+  body[data-theme="club"] { background: #DCE0F2; }
+  body[data-theme="billiard"] { background: #DCE8DA; }
   .app {
     background: var(--paper); margin: 28px auto; border-radius: 28px;
     box-shadow: 0 30px 60px -28px rgba(30, 25, 15, 0.35);
