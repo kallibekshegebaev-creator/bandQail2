@@ -9,11 +9,11 @@ CREATE TABLE IF NOT EXISTS districts (
     name TEXT NOT NULL UNIQUE
 );
 
--- Salon: sartaroshxona yoki go'zallik saloni
+-- Salon: sartaroshxona, go'zallik saloni, kompyuter klubi yoki billiard klubi
 CREATE TABLE IF NOT EXISTS salons (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     name        TEXT NOT NULL,
-    kind        TEXT NOT NULL CHECK (kind IN ('barbershop', 'beauty')),
+    kind        TEXT NOT NULL CHECK (kind IN ('barbershop', 'beauty', 'computer_club', 'billiard_club')),
     district_id INTEGER NOT NULL REFERENCES districts(id),
     address     TEXT NOT NULL,
     phone       TEXT,
@@ -120,3 +120,37 @@ def _migrate(conn):
     # ustalar uchun ham xavfsiz — faqat haqiqiy telefon/token takrorlanishini to'sadi.
     conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_masters_phone ON masters(phone)")
     conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_masters_token ON masters(auth_token)")
+    _migrate_salons_kind_check(conn)
+
+
+def _migrate_salons_kind_check(conn):
+    """Eski bazalarda salons.kind ustuni faqat 'barbershop'/'beauty' qiymatlarini qabul qiladigan
+    CHECK bilan yaratilgan edi. SQLite CHECK shartini to'g'ridan-to'g'ri o'zgartirib bo'lmaydi,
+    shuning uchun jadvalni yangi shart bilan qayta quramiz (ma'lumotlar saqlanadi)."""
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='salons'"
+    ).fetchone()
+    if row is None or row["sql"] is None or "computer_club" in row["sql"]:
+        return  # jadval yo'q yoki allaqachon yangilangan
+    # executescript() isolation_level=None rejimida o'zi avtomatik commit qiladi (har bir DDL
+    # darhol kuchga kiradi), shuning uchun bu yerda qo'lda BEGIN/COMMIT shart emas.
+    conn.executescript("""
+        ALTER TABLE salons RENAME TO salons_old;
+        CREATE TABLE salons (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            name        TEXT NOT NULL,
+            kind        TEXT NOT NULL CHECK (kind IN ('barbershop', 'beauty', 'computer_club', 'billiard_club')),
+            district_id INTEGER NOT NULL REFERENCES districts(id),
+            address     TEXT NOT NULL,
+            phone       TEXT,
+            open_time   TEXT NOT NULL DEFAULT '09:00',
+            close_time  TEXT NOT NULL DEFAULT '20:00',
+            paid_until  TEXT,
+            is_active   INTEGER NOT NULL DEFAULT 1,
+            photo_url   TEXT,
+            lat         REAL,
+            lng         REAL
+        );
+        INSERT INTO salons SELECT * FROM salons_old;
+        DROP TABLE salons_old;
+    """)
