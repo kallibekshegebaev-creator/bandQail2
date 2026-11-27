@@ -92,7 +92,18 @@
     });
   }
 
-  const KIND_LABEL = { barbershop: "Barbershop", beauty: "Go'zallik saloni" };
+  const KIND_LABEL = {
+    barbershop: "Barbershop", beauty: "Go'zallik saloni",
+    computer_club: "Kompyuter klubi", billiard_club: "Billyard klubi",
+  };
+  // Klublarda "usta" = stol/kompyuter — formalar shunga qarab matnini o'zgartiradi
+  const RESOURCE_LABEL = {
+    barbershop: "Usta", beauty: "Usta", computer_club: "Kompyuter", billiard_club: "Stol",
+  };
+  function kindOfSalon(salonId) {
+    const s = S.salons.find((x) => x.id === salonId);
+    return (s && s.kind) || "barbershop";
+  }
   const STATUS_LABEL = { booked: "Band", done: "Bajarildi", cancelled: "Bekor qilindi", no_show: "Kelmadi" };
 
   function switchHtml(id, checked, extra = "") {
@@ -186,6 +197,7 @@
           <div><label>Nomi</label><input class="input" name="name" required></div>
           <div><label>Yo'nalish</label><select class="select" name="kind" required>
             <option value="barbershop">Barbershop</option><option value="beauty">Go'zallik saloni</option>
+            <option value="computer_club">Kompyuter klubi</option><option value="billiard_club">Billyard klubi</option>
           </select></div>
           <div><label>Tuman</label><select class="select" name="district_id" required>${districtOptions}</select></div>
           <div><label>Telefon</label><input class="input" name="phone" placeholder="+998 90 123 45 67"></div>
@@ -194,7 +206,7 @@
           <div><label>Yopilish</label><input class="input" name="close_time" type="time" value="20:00" required></div>
           <div><label>Obuna muddati (ixtiyoriy)</label><input class="input" name="paid_until" type="date"></div>
           <div class="span2"><label>Rasm</label>
-            <input class="input" name="photo_url" type="url" placeholder="https://... (yoki pastdan fayl tanlang)">
+            <input class="input" name="photo_url" type="text" placeholder="https://... (yoki pastdan fayl tanlang)">
             <input type="file" accept="image/*" data-photo-file style="margin-top:6px">
           </div>
           <div><label>Kenglik — lat (ixtiyoriy)</label><input class="input" name="lat" type="number" step="0.000001" placeholder="41.311081"></div>
@@ -260,6 +272,8 @@
           <div><label>Yo'nalish</label><select class="select" name="kind" required>
             <option value="barbershop" ${s.kind === "barbershop" ? "selected" : ""}>Barbershop</option>
             <option value="beauty" ${s.kind === "beauty" ? "selected" : ""}>Go'zallik saloni</option>
+            <option value="computer_club" ${s.kind === "computer_club" ? "selected" : ""}>Kompyuter klubi</option>
+            <option value="billiard_club" ${s.kind === "billiard_club" ? "selected" : ""}>Billyard klubi</option>
           </select></div>
           <div><label>Tuman</label><select class="select" name="district_id" required>${editDistrictOptions}</select></div>
           <div><label>Telefon</label><input class="input" name="phone" value="${esc(s.phone || "")}"></div>
@@ -269,7 +283,7 @@
           <div class="span2"><button class="btn btn--small" type="submit">Saqlash</button></div>
         </form>
         <form class="admin-inline-form" data-photo="${s.id}">
-          <input class="input" name="photo_url" type="url" placeholder="Rasm havolasi" value="${esc(s.photo_url || "")}">
+          <input class="input" name="photo_url" type="text" placeholder="Rasm havolasi" value="${esc(s.photo_url || "")}">
           <input type="file" accept="image/*" data-photo-file>
           <button class="btn btn--small btn--quiet" type="submit">Saqlash</button>
         </form>
@@ -373,22 +387,23 @@
 
     if (!S.salons.length) { shell(`<div class="admin-card admin-empty">Avval "Salonlar" bo'limida salon qo'shing.</div>`); return; }
     if (!S.selectedSalonId) S.selectedSalonId = S.salons[0].id;
+    const resLabel = RESOURCE_LABEL[kindOfSalon(S.selectedSalonId)] || "Usta";
 
     shell(`
       <div class="admin-card">
         <label><span class="small muted">Salon</span>
           <select class="select" id="salon-pick" style="margin-top:6px">
-            ${S.salons.map((s) => `<option value="${s.id}" ${s.id === S.selectedSalonId ? "selected" : ""}>${esc(s.name)}</option>`).join("")}
+            ${S.salons.map((s) => `<option value="${s.id}" ${s.id === S.selectedSalonId ? "selected" : ""}>${esc(s.name)} (${KIND_LABEL[s.kind] || s.kind})</option>`).join("")}
           </select>
         </label>
         <form class="admin-form admin-form--2col" id="f-master" style="margin-top:14px">
-          <div><label>Usta ismi</label><input class="input" name="name" required></div>
+          <div><label>${esc(resLabel)} nomi</label><input class="input" name="name" required placeholder="${resLabel === "Usta" ? "" : (resLabel === "Stol" ? "Stol 1" : "Kompyuter 1")}"></div>
           <div><label>Obuna muddati (ixtiyoriy)</label><input class="input" name="paid_until" type="date"></div>
           <div class="span2"><label>Rasm</label>
-            <input class="input" name="photo_url" type="url" placeholder="https://... (yoki pastdan fayl tanlang)">
+            <input class="input" name="photo_url" type="text" placeholder="https://... (yoki pastdan fayl tanlang)">
             <input type="file" accept="image/*" data-photo-file style="margin-top:6px">
           </div>
-          <div class="span2"><button class="btn" type="submit">Usta qo'shish</button></div>
+          <div class="span2"><button class="btn" type="submit">${esc(resLabel)} qo'shish</button></div>
         </form>
       </div>
       <div id="master-list">${loadingCard()}</div>
@@ -433,7 +448,7 @@
           <button class="btn btn--small btn--quiet" type="submit">${m.has_login ? "Parolni yangilash" : "Login berish"}</button>
         </form>
         <form class="admin-inline-form" data-mphoto="${m.id}">
-          <input class="input" name="photo_url" type="url" placeholder="Rasm havolasi" value="${esc(m.photo_url || "")}">
+          <input class="input" name="photo_url" type="text" placeholder="Rasm havolasi" value="${esc(m.photo_url || "")}">
           <input type="file" accept="image/*" data-photo-file>
           <button class="btn btn--small btn--quiet" type="submit">Saqlash</button>
         </form>
@@ -444,7 +459,7 @@
         <div class="admin-card__actions">
           <button class="admin-link-btn" data-action="go-services" data-id="${m.id}" data-name="${esc(m.name)}">Xizmatlari →</button>
         </div>
-      </div>`).join("") : `<div class="admin-card admin-empty">Bu salonda hali usta yo'q</div>`;
+      </div>`).join("") : `<div class="admin-card admin-empty">Bu salonda hali ${esc(resLabel.toLowerCase())} yo'q</div>`;
     $$("form[data-mphoto]", listEl).forEach(wirePhotoUpload);
 
     listEl.addEventListener("change", async (e) => {
