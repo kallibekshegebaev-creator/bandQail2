@@ -83,3 +83,10 @@ olinadi, brauzerda esqa shu qurilma uchun vaqtinchalik ID saqlanadi).
 3. Usta paneli (jadval, "tugatish" / "kelmadi") va admin sahifasi (hozircha faqat /docs orqali)
 4. Telegram bot: @BotFather'da bot ochish, Mini App tugmasini ulash, admin xabarlarini yoqish
 5. Internetga chiqarish (domen, HTTPS)
+
+
+## Ma'lumotlar yo'qolmasligi uchun (muhim)
+Baza (`bandqil.db`) va yuklangan rasmlar (`uploads/`) oddiy fayl. Render/Railway/Heroku kabi
+hostinglarda har yangi deploydan keyin papka tozalanadi — salonlar ham shu bilan o'chib ketadi.
+Doimiy disk (volume) ulab, `.env`/o'zgaruvchilarga shuni yozing: `BANDQIL_DB=/data/bandqil.db`
+(rasmlar avtomatik `/data/uploads` ga tushadi). `bandqil.db` ni GitHub'ga yuklamang (`.gitignore`).
