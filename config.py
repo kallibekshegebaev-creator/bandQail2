@@ -23,6 +23,10 @@ _load_env()
 # Ma'lumotlar bazasi fayli (keyin PostgreSQL'ga o'tamiz)
 DB_PATH = os.getenv("BANDQIL_DB", str(BASE_DIR / "bandqil.db"))
 
+# Yuklangan rasmlar papkasi. Standart: baza fayli yonidagi "uploads" papka.
+# Hostingda BANDQIL_DB ni doimiy disk (volume) ichiga ko'rsating — rasmlar ham shu yerda saqlanadi.
+UPLOAD_DIR = os.getenv("BANDQIL_UPLOADS", str(Path(DB_PATH).resolve().parent / "uploads"))
+
 # Admin API uchun maxfiy kalit (.env ichida ADMIN_TOKEN=uzun-tasodifiy-matn)
 ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "")
 
