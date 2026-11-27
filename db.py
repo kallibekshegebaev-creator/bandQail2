@@ -123,34 +123,72 @@ def _migrate(conn):
     _migrate_salons_kind_check(conn)
 
 
+SALONS_DDL = """
+    CREATE TABLE salons (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        name        TEXT NOT NULL,
+        kind        TEXT NOT NULL CHECK (kind IN ('barbershop', 'beauty', 'computer_club', 'billiard_club')),
+        district_id INTEGER NOT NULL REFERENCES districts(id),
+        address     TEXT NOT NULL,
+        phone       TEXT,
+        open_time   TEXT NOT NULL DEFAULT '09:00',
+        close_time  TEXT NOT NULL DEFAULT '20:00',
+        paid_until  TEXT,
+        is_active   INTEGER NOT NULL DEFAULT 1,
+        photo_url   TEXT,
+        lat         REAL,
+        lng         REAL
+    )"""
+
+
 def _migrate_salons_kind_check(conn):
-    """Eski bazalarda salons.kind ustuni faqat 'barbershop'/'beauty' qiymatlarini qabul qiladigan
-    CHECK bilan yaratilgan edi. SQLite CHECK shartini to'g'ridan-to'g'ri o'zgartirib bo'lmaydi,
-    shuning uchun jadvalni yangi shart bilan qayta quramiz (ma'lumotlar saqlanadi)."""
-    row = conn.execute(
-        "SELECT sql FROM sqlite_master WHERE type='table' AND name='salons'"
-    ).fetchone()
-    if row is None or row["sql"] is None or "computer_club" in row["sql"]:
-        return  # jadval yo'q yoki allaqachon yangilangan
-    # executescript() isolation_level=None rejimida o'zi avtomatik commit qiladi (har bir DDL
-    # darhol kuchga kiradi), shuning uchun bu yerda qo'lda BEGIN/COMMIT shart emas.
-    conn.executescript("""
-        ALTER TABLE salons RENAME TO salons_old;
-        CREATE TABLE salons (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            name        TEXT NOT NULL,
-            kind        TEXT NOT NULL CHECK (kind IN ('barbershop', 'beauty', 'computer_club', 'billiard_club')),
-            district_id INTEGER NOT NULL REFERENCES districts(id),
-            address     TEXT NOT NULL,
-            phone       TEXT,
-            open_time   TEXT NOT NULL DEFAULT '09:00',
-            close_time  TEXT NOT NULL DEFAULT '20:00',
-            paid_until  TEXT,
-            is_active   INTEGER NOT NULL DEFAULT 1,
-            photo_url   TEXT,
-            lat         REAL,
-            lng         REAL
-        );
-        INSERT INTO salons SELECT * FROM salons_old;
-        DROP TABLE salons_old;
-    """)
+    """Eski bazalarda salons.kind faqat 'barbershop'/'beauty' ni qabul qilardi. Jadvalni yangi
+    shart bilan qayta quramiz (ma'lumotlar saqlanadi).
+
+    MUHIM: oldingi versiya jadvalni RENAME qilardi — SQLite bunda ustalar/baholar jadvalidagi
+    havolalarni ham "salons_old" ga ko'chirib yuborardi va yangi salon/usta qo'shish
+    "Ma'lumot noto'g'ri yoki takrorlangan" xatosi bilan to'xtardi. Endi havolalarga tegmaymiz,
+    va shu xatodan buzilgan bazalarni ham o'zi tuzatadi."""
+    repaired = False
+    conn.execute("PRAGMA foreign_keys = OFF")
+    try:
+        row = conn.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='salons'").fetchone()
+        if row is not None and row["sql"] and "computer_club" not in row["sql"]:
+            cols = [r["name"] for r in conn.execute("PRAGMA table_info(salons)")]
+            conn.execute("BEGIN")
+            conn.execute(SALONS_DDL.replace("TABLE salons", "TABLE salons_new", 1))
+            new_cols = [r["name"] for r in conn.execute("PRAGMA table_info(salons_new)")]
+            use = ", ".join(c for c in new_cols if c in cols)
+            conn.execute(f"INSERT INTO salons_new ({use}) SELECT {use} FROM salons")
+            conn.execute("DROP TABLE salons")
+            conn.execute("ALTER TABLE salons_new RENAME TO salons")
+            conn.execute("COMMIT")
+
+        # Oldingi buggy migratsiyadan qolgan: boshqa jadvallar "salons_old" ga qarab qolgan
+        broken = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND sql LIKE '%salons_old%'").fetchall()
+        if broken:
+            old_exists = conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='salons_old'").fetchone()
+            if old_exists:  # yo'qolib qolgan qatorlar bo'lsa, qaytarib olamiz
+                cols = [r["name"] for r in conn.execute("PRAGMA table_info(salons)")]
+                old_cols = [r["name"] for r in conn.execute("PRAGMA table_info(salons_old)")]
+                use = ", ".join(c for c in cols if c in old_cols)
+                conn.execute(f"INSERT OR IGNORE INTO salons ({use}) SELECT {use} FROM salons_old")
+            ver = conn.execute("PRAGMA schema_version").fetchone()[0]
+            conn.execute("PRAGMA writable_schema = ON")
+            conn.execute("UPDATE sqlite_master SET sql = REPLACE(REPLACE(sql, '\"salons_old\"', 'salons'), "
+                         "'salons_old', 'salons') WHERE type='table' AND name != 'salons_old' AND sql LIKE '%salons_old%'")
+            conn.execute(f"PRAGMA schema_version = {ver + 1}")
+            conn.execute("PRAGMA writable_schema = OFF")
+            repaired = True
+    finally:
+        conn.execute("PRAGMA foreign_keys = ON")
+    if repaired:
+        # sxema o'zgargani uchun yangi ulanish bilan davom etamiz
+        fresh = connect()
+        try:
+            fresh.execute("PRAGMA foreign_keys = OFF")
+            fresh.execute("DROP TABLE IF EXISTS salons_old")
+        finally:
+            fresh.close()
