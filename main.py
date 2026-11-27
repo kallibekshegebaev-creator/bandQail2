@@ -5,7 +5,7 @@ import secrets
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, FastAPI, Header, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, FastAPI, File, Header, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -20,6 +20,8 @@ logging.basicConfig(level=logging.INFO)
 init_db()
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
+UPLOAD_PATH = Path(config.UPLOAD_DIR)
+UPLOAD_PATH.mkdir(parents=True, exist_ok=True)
 
 app = FastAPI(title="BandQil API", version="0.1")
 
@@ -72,6 +74,24 @@ class ReviewIn(BaseModel):
 
 
 class DistrictIn(BaseModel):
+    name: str
+
+
+class DistrictRenameIn(BaseModel):
+    name: str
+
+
+class SalonUpdateIn(BaseModel):
+    name: Optional[str] = None
+    kind: Optional[str] = Field(default=None, description="barbershop, beauty, computer_club yoki billiard_club")
+    district_id: Optional[int] = None
+    address: Optional[str] = None
+    phone: Optional[str] = None
+    open_time: Optional[str] = None
+    close_time: Optional[str] = None
+
+
+class MasterRenameIn(BaseModel):
     name: str
 
 
@@ -248,6 +268,48 @@ def admin_add_district(body: DistrictIn):
     return svc.add_district(body.name)
 
 
+@admin.patch("/districts/{district_id}")
+def admin_rename_district(district_id: int, body: DistrictRenameIn):
+    return svc.rename_district(district_id, body.name)
+
+
+@admin.delete("/districts/{district_id}")
+def admin_delete_district(district_id: int):
+    """Tumanni o'chirish. Unda salonlar bo'lsa, o'chirib bo'lmaydi."""
+    return svc.delete_district(district_id)
+
+
+MAX_PHOTO_BYTES = 5 * 1024 * 1024
+
+
+def _image_ext(data: bytes):
+    """Fayl turini kengaytmasiga emas, ichidagi haqiqiy belgilarga qarab aniqlaydi."""
+    if data.startswith(b"\xff\xd8\xff"):
+        return ".jpg"
+    if data.startswith(b"\x89PNG\r\n\x1a\n"):
+        return ".png"
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return ".webp"
+    if data[:6] in (b"GIF87a", b"GIF89a"):
+        return ".gif"
+    return None
+
+
+@admin.post("/upload-photo")
+async def admin_upload_photo(file: UploadFile = File(...)):
+    """Kompyuterdan rasm yuklash. Qaytgan 'url' ni salon/usta rasmi sifatida saqlash mumkin."""
+    data = await file.read(MAX_PHOTO_BYTES + 1)
+    if len(data) > MAX_PHOTO_BYTES:
+        raise HTTPException(status_code=413, detail="Rasm hajmi 5 MB dan oshmasin")
+    ext = _image_ext(data)
+    if ext is None:
+        raise HTTPException(status_code=400, detail="Faqat JPG, PNG, WEBP yoki GIF rasm yuklang")
+    UPLOAD_PATH.mkdir(parents=True, exist_ok=True)
+    name = secrets.token_hex(12) + ext
+    (UPLOAD_PATH / name).write_bytes(data)
+    return {"url": f"/uploads/{name}"}
+
+
 @admin.get("/salons")
 def admin_get_salons():
     """Hamma salonlar: yashirilgan va to'lamaganlar ham ko'rinadi."""
@@ -259,6 +321,19 @@ def admin_add_salon(body: SalonIn):
     return svc.add_salon(body.name, body.kind, body.district_id, body.address, body.phone,
                          body.open_time, body.close_time, body.paid_until,
                          body.photo_url, body.lat, body.lng)
+
+
+@admin.patch("/salons/{salon_id}")
+def admin_update_salon(salon_id: int, body: SalonUpdateIn):
+    """Salon maydonlarini tuzatish (faqat yuborilgan maydonlar o'zgaradi)."""
+    return svc.update_salon(salon_id, body.name, body.kind, body.district_id, body.address,
+                            body.phone, body.open_time, body.close_time)
+
+
+@admin.delete("/salons/{salon_id}")
+def admin_delete_salon(salon_id: int):
+    """Salonni o'chirish. Unda ustalar bo'lsa, o'chirib bo'lmaydi."""
+    return svc.delete_salon(salon_id)
 
 
 @admin.post("/salons/{salon_id}/photo")
@@ -279,6 +354,17 @@ def admin_get_masters(salon_id: int):
 @admin.post("/masters")
 def admin_add_master(body: MasterIn):
     return svc.add_master(body.salon_id, body.name, body.paid_until, body.photo_url)
+
+
+@admin.patch("/masters/{master_id}")
+def admin_rename_master(master_id: int, body: MasterRenameIn):
+    return svc.rename_master(master_id, body.name)
+
+
+@admin.delete("/masters/{master_id}")
+def admin_delete_master(master_id: int):
+    """Ustani o'chirish. Unga bronlar bog'langan bo'lsa, o'chirib bo'lmaydi."""
+    return svc.delete_master(master_id)
 
 
 @admin.post("/masters/{master_id}/photo")
@@ -390,4 +476,5 @@ def usta_booking_status(booking_no: str, body: StatusIn, master: dict = Depends(
 app.include_router(usta)
 
 # Mijoz sahifalari (static/ papkasi). Eng oxirida turishi kerak, aks holda /api so'rovlarini to'sib qo'yadi.
+app.mount("/uploads", StaticFiles(directory=UPLOAD_PATH), name="uploads")
 app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
